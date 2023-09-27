@@ -3,12 +3,10 @@ const { infoAsync, errorAsync } = require('./apputils');
 
 async function login(page, url, username, password) {
     await page.goto(url, { timeout: 90000 });
-    await page.waitForXPath('/html/body/div[2]/div/div/div/div[1]/div[3]/button')
-        .then(element => element.click());
-    await page.waitForSelector('#input-1');
-    await page.type('#input-1', username);
-    await page.type('#input-2', password);
-    await page.evaluate(`document.querySelector('form[data-vv-scope="form-login"]').children[2].firstChild.click();`);
+    await page.waitForXPath('/html/body/div/div/ng-include/div/section/form');
+    await page.type('#username', username);
+    await page.type('#password', password);
+    await page.click('#submit');
     await page.waitForNavigation({ timeout: 90000 });
     infoAsync(`login successful, url: ${url}`);
 }

@@ -1,3 +1,4 @@
+/* ******** imports ******* */
 const { existsSync } = require('fs');
 const path = require('path');
 const express = require('express');
@@ -8,8 +9,12 @@ const { login, register, lockUser, deposit, withdraw, changePass } = require('./
 
 require('dotenv').config();
 
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
+
+/* ******** declarations & initializations ******* */
 const app = express();
-const PORT = 80;
+const PORT = 3000;
 const bodyParser = require('body-parser');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
@@ -20,10 +25,36 @@ const corsOptions = {
     optionsSuccessStatus: 204
 };
 
-var b;
+/* ******** swagger setup ******* */
+const options = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'lotus api',
+            version: '1.0.0',
+            description: 'This is a REST API application made with Express. It retrieves data from JSONPlaceholder.',
+            license: {
+                name: 'Licensed Under MIT',
+                url: 'https://spdx.org/licenses/MIT.html',
+            },
+        },
+        servers: [
+            {
+                url: 'http://localhost:3000',
+                description: 'development server'
+            },
+        ],
+    },
+    apis: ['./constant.js'],
+};
+
+const specs = swaggerJsdoc(options);
+
+/* ******** browser setup ******* */
+var browser;
 
 (async () => {
-    b = await puppeteer.launch({
+    browser = await puppeteer.launch({
         args: [
             '--disable-setuid-sandbox',
             '--no-sandbox',
@@ -35,12 +66,14 @@ var b;
             process.env.NODE_ENV === "production"
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: true,
+        headless: false,
         timeout: 120000,
         defaultViewport: { width: 1300, height: 800 },
     });
 })();
 
+/* ******** middleware setups ******* */
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(specs));
 app.use(express.json());
 app.use(bodyParser.json())
 app.use(cors(corsOptions));
@@ -53,7 +86,7 @@ app.use(async (req, res, next) => {
             return;
         }
         if (!loginCache.get(url).page) {
-            loginCache.get(url).page = await b.newPage();
+            loginCache.get(url).page = await browser.newPage();
         }
 
         let pageUrl = await loginCache.get(url).page.url();
@@ -64,10 +97,7 @@ app.use(async (req, res, next) => {
     next();
 });
 
-app.get('/', (req, res) => {
-    res.send('server up and running');
-});
-
+/* ******** api ******* */
 app.get('/addsite', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'addsite.html');
     res.sendFile(filePath);
@@ -77,6 +107,7 @@ app.get('/getlogs', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
 });
+
 app.post('/login', async (req, res) => {
     const isLogin = async (url) => {
         if (!loginCache.get(url)) {
@@ -101,7 +132,7 @@ app.post('/login', async (req, res) => {
         if (!flag) {
             let page = loginCache.get(url)?.page;
             if (page === undefined) {
-                page = await b.newPage();
+                page = await browser.newPage();
             }
 
             loginCache.set(url, {
@@ -121,7 +152,7 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
-    const page = await b.newPage();
+    const page = await browser.newPage();
     const { url, username, tCode } = req.body;
 
     try {
@@ -139,7 +170,7 @@ app.post('/register', async (req, res) => {
 });
 
 app.post('/changepass', async (req, res) => {
-    const page = await b.newPage();
+    const page = await browser.newPage();
     const { url, username, pass } = req.body;
 
     try {
@@ -155,7 +186,7 @@ app.post('/changepass', async (req, res) => {
 
 app.post('/deposit', async (req, res) => {
     const { url, username, amount, tCode } = req.body;
-    const page = await b.newPage();
+    const page = await browser.newPage();
     try {
         if (!isValidAmount(amount)) {
             res.status(400).json({ message: "invalid amount format" });
@@ -184,7 +215,7 @@ app.post('/deposit', async (req, res) => {
 
 app.post('/withdraw', async (req, res) => {
     const { url, username, amount, tCode } = req.body;
-    const page = await b.newPage();
+    const page = await browser.newPage();
 
     try {
         if (!isValidAmount(amount)) {
@@ -214,7 +245,7 @@ app.post('/withdraw', async (req, res) => {
 
 app.post('/lockuser', async (req, res) => {
     const { url, username, tCode } = req.body;
-    const page = await b.newPage();
+    const page = await browser.newPage();
 
     try {
         const result = await lockUser(page, url, username, tCode);
@@ -252,8 +283,9 @@ app.post('/logs', (req, res) => {
     });
 });
 
+/* ******** server startup & shutdown ******* */
 app.listen(PORT);
 
 process.on('SIGINT', () => {
-    b.close();
+    browser.close();
 });
