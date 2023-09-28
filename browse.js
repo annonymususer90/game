@@ -1,4 +1,4 @@
-const { defaultPassword } = require('./constant');
+const { defaultPassword } = require('./configs');
 const { infoAsync, errorAsync } = require('./apputils');
 
 async function login(page, url, username, password) {

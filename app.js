@@ -9,9 +9,6 @@ const { login, register, lockUser, deposit, withdraw, changePass } = require('./
 
 require('dotenv').config();
 
-const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
-
 /* ******** declarations & initializations ******* */
 const app = express();
 const PORT = 3000;
@@ -24,31 +21,6 @@ const corsOptions = {
     credentials: false,
     optionsSuccessStatus: 204
 };
-
-/* ******** swagger setup ******* */
-const options = {
-    definition: {
-        openapi: '3.0.0',
-        info: {
-            title: 'lotus api',
-            version: '1.0.0',
-            description: 'This is a REST API application made with Express. It retrieves data from JSONPlaceholder.',
-            license: {
-                name: 'Licensed Under MIT',
-                url: 'https://spdx.org/licenses/MIT.html',
-            },
-        },
-        servers: [
-            {
-                url: 'http://localhost:3000',
-                description: 'development server'
-            },
-        ],
-    },
-    apis: ['./constant.js'],
-};
-
-const specs = swaggerJsdoc(options);
 
 /* ******** browser setup ******* */
 var browser;
@@ -73,25 +45,35 @@ var browser;
 })();
 
 /* ******** middleware setups ******* */
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+const isLogin = async (url) => {
+
+    if (!loginCache.get(url)) {
+        return false;
+    }
+
+    const pageUrl = await loginCache.get(url).page.url();
+    if (pageUrl.includes(url)) {
+        try {
+            await loginCache.get(url).page.waitForXPath("/html/body/div/div/ng-include/div/section/form", { timeout: 3000 });
+            return false;
+        } catch (ex) {
+        }
+    }
+
+    return true;
+}
+
 app.use(express.json());
 app.use(bodyParser.json())
 app.use(cors(corsOptions));
 app.use(express.static('public'));
 app.use(async (req, res, next) => {
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/' && req.path !== '/addsite' && req.path !== '/getlogs') {
+    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/addsite' && req.path !== '/getlogs') {
         const { url } = req.body;
-        if (!loginCache.get(url)) {
+        if (!isLogin(url)) {
             res.status(401).json({ message: 'login details not available' });
             return;
-        }
-        if (!loginCache.get(url).page) {
-            loginCache.get(url).page = await browser.newPage();
-        }
-
-        let pageUrl = await loginCache.get(url).page.url();
-        if (pageUrl !== `${url}/home`) {
-            await login(loginCache.get(url).page, url, loginCache.get(url).username, loginCache.get(url).password);
         }
     }
     next();
@@ -108,43 +90,32 @@ app.get('/getlogs', (req, res) => {
     res.sendFile(filePath);
 });
 
+app.all
+
 app.post('/login', async (req, res) => {
-    const isLogin = async (url) => {
-        if (!loginCache.get(url)) {
-            return false;
-        }
-        const page = loginCache.get(url).page;
-        if (!page) {
-            return false;
-        }
+    const { url, username, password } = req.body;
 
-        const pageUrl = await page.url();
-        if (pageUrl !== `${url}/home`) {
-            return false;
-        }
-
-        return true;
+    if (isLogin(url)) {
+        res.status(200).json({ message: 'login already awailable for url: ' + url });
     }
 
-    const { url, username, password } = req.body;
     try {
-        let flag = await isLogin(url);
-        if (!flag) {
-            let page = loginCache.get(url)?.page;
-            if (page === undefined) {
-                page = await browser.newPage();
-            }
+        const page = await browser.newPage();
+        loginCache.set(url, { 
+            url: url, 
+            username: username, 
+            page: page
+        });
 
-            loginCache.set(url, {
-                page: page,
-                username: username,
-                password: password
-            });
-            await login(page, url, username, password);
-            res.status(200).json({ message: 'login success to url ' + url });
-            return;
-        }
-        res.json({ message: 'login success to url ' + url });
+        loginCache.set(url, {
+            page: page,
+            username: username,
+            password: password
+        });
+
+        await login(page, url, username, password);
+
+        res.status(200).json({ message: 'login success to url ' + url });
     } catch (ex) {
         errorAsync(ex.message);
         res.status(400).json({ message: 'login unsuccess to ' + url });
