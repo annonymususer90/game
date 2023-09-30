@@ -112,8 +112,6 @@ app.post('/register', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(`request responded with error: ${error.message}`);
-    } finally {
-        page.close();
     }
 });
 
@@ -127,8 +125,6 @@ app.post('/changepass', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(error.message);
-    } finally {
-        page.close();
     }
 });
 
@@ -156,8 +152,6 @@ app.post('/deposit', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(`[res] ${url} - ${res.statusCode}, Message: ${error.message}`);
-    } finally {
-        page.close();
     }
 });
 
@@ -186,8 +180,6 @@ app.post('/withdraw', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(error.message);
-    } finally {
-        page.close();
     }
 });
 
