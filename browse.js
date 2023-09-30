@@ -1,6 +1,24 @@
 const { defaultPassword } = require('./configs');
 const { infoAsync, errorAsync } = require('./apputils');
 
+const isLogin = async (loginCache, url) => {
+
+    if (loginCache.get(url) === undefined) {
+        return false;
+    }
+
+    const pageUrl = await loginCache.get(url).page.url();
+    if (pageUrl.includes(url)) {
+        try {
+            await loginCache.get(url).page.waitForXPath("/html/body/div/div/ng-include/div/section/form", { timeout: 3000 });
+            return false;
+        } catch (ex) {
+        }
+    }
+
+    return true;
+}
+
 async function login(page, url, username, password) {
     await page.goto(url, { timeout: 90000 });
     await page.waitForXPath('/html/body/div/div/ng-include/div/section/form');
@@ -181,6 +199,7 @@ async function withdraw(page, url, username, amount, tCode) {
 }
 
 module.exports = {
+    isLogin: isLogin,
     login: login,
     register: register,
     lockUser: lockUser,

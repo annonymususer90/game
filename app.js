@@ -5,7 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const puppeteer = require('puppeteer');
 const { infoAsync, errorAsync, warnAsync, isValidAmount } = require('./apputils');
-const { login, register, lockUser, deposit, withdraw, changePass } = require('./browse');
+const { isLogin, login, register, lockUser, deposit, withdraw, changePass } = require('./browse');
 
 require('dotenv').config();
 
@@ -44,26 +44,7 @@ var browser;
     });
 })();
 
-/* ******** middleware setups ******* */
-
-const isLogin = async (url) => {
-
-    if (!loginCache.get(url)) {
-        return false;
-    }
-
-    const pageUrl = await loginCache.get(url).page.url();
-    if (pageUrl.includes(url)) {
-        try {
-            await loginCache.get(url).page.waitForXPath("/html/body/div/div/ng-include/div/section/form", { timeout: 3000 });
-            return false;
-        } catch (ex) {
-        }
-    }
-
-    return true;
-}
-
+/* ******** middleware setup ******* */
 app.use(express.json());
 app.use(bodyParser.json())
 app.use(cors(corsOptions));
@@ -71,7 +52,9 @@ app.use(express.static('public'));
 app.use(async (req, res, next) => {
     if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/addsite' && req.path !== '/getlogs') {
         const { url } = req.body;
-        if (!isLogin(url)) {
+        let flag = await isLogin(loginCache, url);
+
+        if (!flag) {
             res.status(401).json({ message: 'login details not available' });
             return;
         }
@@ -90,22 +73,16 @@ app.get('/getlogs', (req, res) => {
     res.sendFile(filePath);
 });
 
-app.all
-
 app.post('/login', async (req, res) => {
     const { url, username, password } = req.body;
 
-    if (isLogin(url)) {
+    if (await isLogin(loginCache, url)) {
         res.status(200).json({ message: 'login already awailable for url: ' + url });
+        return;
     }
 
     try {
         const page = await browser.newPage();
-        loginCache.set(url, { 
-            url: url, 
-            username: username, 
-            page: page
-        });
 
         loginCache.set(url, {
             page: page,
@@ -123,8 +100,8 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
-    const page = await browser.newPage();
     const { url, username, tCode } = req.body;
+    const page = loginCache.get(url).page;
 
     try {
         const result = await register(page, url, username, tCode);
