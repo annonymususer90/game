@@ -1,4 +1,4 @@
-const { defaultPassword } = require('./configs');
+const { defaultPassword } = require('./constants');
 const { infoAsync, errorAsync } = require('./apputils');
 
 const isLogin = async (loginCache, url) => {
@@ -30,8 +30,11 @@ async function login(page, url, username, password) {
 }
 
 async function register(page, url, username, tCode) {
+    let res = {}
     try {
-        await page.goto(`${url}/users/insertuser`, { timeout: 120000 });
+        // click to the navigation to 
+        await page.waitForXPath('/html/body/div/div/div/div[1]/div[1]/div/nav/ul/li[1]/ul/li[1]/a', { timeout: 120000 })
+            .then(element => element.click());
 
         await page.waitForXPath('/html/body/div[2]/div/div[2]/div/div/div/form/div/div[1]/div/div/div[1]/input', { timeout: 120000 })
             .then(element => element.type(username));
@@ -47,15 +50,9 @@ async function register(page, url, username, tCode) {
             .then(element => element.type(tCode + '\n'));
 
         await page.waitForNavigation({ timeout: 1000 })
-            .catch(async err => {
-                let url = await page.url();
-                if (url !== null && url !== `${url}/activeusers`) {
-                    throw new Exception("invalid username");
-                }
-            });
+            .catch(err => res = { success: false, message: 'Something went wrong' });
 
-        return { success: true }
-
+        return res;
     } catch (error) {
         errorAsync(error.message);
         return { success: false, error: "invalid username" };
@@ -114,7 +111,7 @@ async function lockUser(page, url, username, tCode) {
         // await page.evaluate(`document.querySelector('form[data-vv-scope="UserLock"]').children[1].children[1].firstChild.click()`);
         await page.waitForSelector('input[name="UserLockMpassword"]')
             .then(async element => await element.type(tCode + "\n"));
-        
+
     } catch (error) {
         await login();
         return { success: false, error: error.message };

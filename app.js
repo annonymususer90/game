@@ -40,7 +40,7 @@ var browser;
                 : puppeteer.executablePath(),
         headless: false,
         timeout: 120000,
-        defaultViewport: { width: 1300, height: 800 },
+        defaultViewport: { width: 1920, height: 1080 },
     });
 })();
 
@@ -104,7 +104,7 @@ app.post('/register', async (req, res) => {
     const page = loginCache.get(url).page;
 
     try {
-        const result = await register(page, url, username, tCode);
+        const result = await register(page, url, username);
         if (result.success == false)
             res.status(400).json({ message: 'User registration not successful', result });
         else
