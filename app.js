@@ -11,8 +11,9 @@ require('dotenv').config();
 
 /* ******** declarations & initializations ******* */
 const app = express();
-const PORT = 3000;
+const PORT = 5000;
 const bodyParser = require('body-parser');
+const { url } = require('inspector');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
@@ -40,7 +41,7 @@ var browser;
                 : puppeteer.executablePath(),
         headless: false,
         timeout: 120000,
-        defaultViewport: { width: 1920, height: 1080 },
+        defaultViewport: { width: 1600, height: 900 },
     });
 })();
 
@@ -49,26 +50,44 @@ app.use(express.json());
 app.use(bodyParser.json())
 app.use(cors(corsOptions));
 app.use(express.static('public'));
-app.use(async (req, res, next) => {
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/addsite' && req.path !== '/getlogs') {
-        const { url } = req.body;
-        let flag = await isLogin(loginCache, url);
+app.use((req, res, next) => {
+    const { url } = req.body;
 
-        if (!flag) {
-            res.status(401).json({ message: 'login details not available' });
-            return;
-        }
+    if (loginCache.has(url) && loginCache.get(url).isBusy) {
+        return res.status(429).json(`the site is busy`);
     }
-    next();
+
+    if (loginCache.has(url))
+        loginCache.get(url).isBusy = true;
+
+    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/addsite' && req.path !== '/getlogs') {
+        isLogin(loginCache, url)
+            .then(isLoggedIn => {
+                if (!isLoggedIn) {
+                    res.status(401).json({ message: 'login details not available' });
+                    return;
+                }
+
+                next();
+
+                if (loginCache.has(url))
+                    loginCache.get(url).isBusy = false;
+            });
+    } else {
+        next();
+        if (loginCache.has(url))
+            loginCache.get(url).isBusy = false;
+
+    }
 });
 
 /* ******** api ******* */
-app.get('/addsite', (req, res) => {
+app.get('/addsite', async (req, res) => {
     const filePath = path.join(__dirname, 'public', 'addsite.html');
     res.sendFile(filePath);
 });
 
-app.get('/getlogs', (req, res) => {
+app.get('/getlogs', async (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
 });
@@ -87,12 +106,14 @@ app.post('/login', async (req, res) => {
         loginCache.set(url, {
             page: page,
             username: username,
-            password: password
+            password: password,
+            isBusy: true
         });
 
         await login(page, url, username, password);
 
         res.status(200).json({ message: 'login success to url ' + url });
+        loginCache.get(url).isBusy = false;
     } catch (ex) {
         errorAsync(ex.message);
         res.status(400).json({ message: 'login unsuccess to ' + url });
@@ -100,15 +121,15 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
-    const { url, username, tCode } = req.body;
+    const { url, username } = req.body;
     const page = loginCache.get(url).page;
 
     try {
-        const result = await register(page, url, username);
-        if (result.success == false)
-            res.status(400).json({ message: 'User registration not successful', result });
+        const result = await register(page, username);
+        if (result.success)
+            res.status(200).json(result);
         else
-            res.json({ message: 'User registration successful', result });
+            res.status(400).json({ message: 'User registration not successful', result });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(`request responded with error: ${error.message}`);
@@ -116,12 +137,12 @@ app.post('/register', async (req, res) => {
 });
 
 app.post('/changepass', async (req, res) => {
-    const page = await browser.newPage();
     const { url, username, pass } = req.body;
+    const page = loginCache.get(url).page;
 
     try {
-        const result = await changePass(page, url, username, pass);
-        res.json({ message: 'Password Change successful', result });
+        const result = await changePass(page, username, pass);
+        res.status(result.success ? 200 : 400).json(result);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(error.message);
@@ -129,8 +150,8 @@ app.post('/changepass', async (req, res) => {
 });
 
 app.post('/deposit', async (req, res) => {
-    const { url, username, amount, tCode } = req.body;
-    const page = await browser.newPage();
+    const { url, username, amount } = req.body;
+    const page = loginCache.get(url).page;
     try {
         if (!isValidAmount(amount)) {
             res.status(400).json({ message: "invalid amount format" });
@@ -139,7 +160,7 @@ app.post('/deposit', async (req, res) => {
 
         infoAsync(`[req] ${url}, user: ${username}, amount: ${amount}`);
         const startTime = new Date();
-        const result = await deposit(page, url, username, amount, tCode);
+        const result = await deposit(page, username, amount);
         const endTime = new Date();
         responseTime = endTime - startTime;
         if (result.success == false) {
@@ -156,8 +177,8 @@ app.post('/deposit', async (req, res) => {
 });
 
 app.post('/withdraw', async (req, res) => {
-    const { url, username, amount, tCode } = req.body;
-    const page = await browser.newPage();
+    const { url, username, amount } = req.body;
+    const page = loginCache.get(url).page;
 
     try {
         if (!isValidAmount(amount)) {
@@ -167,7 +188,7 @@ app.post('/withdraw', async (req, res) => {
 
         infoAsync(`[req] ${url}, user: ${username}, amount: ${amount}`);
         const startTime = new Date();
-        const result = await withdraw(page, url, username, amount, tCode);
+        const result = await withdraw(page, username, amount);
         const endTime = new Date();
         const responseTime = endTime - startTime;
         if (result.success == false) {
@@ -184,11 +205,11 @@ app.post('/withdraw', async (req, res) => {
 });
 
 app.post('/lockuser', async (req, res) => {
-    const { url, username, tCode } = req.body;
-    const page = await browser.newPage();
+    const { url, username } = req.body;
+    const page = loginCache.get(url).page;
 
     try {
-        const result = await lockUser(page, url, username, tCode);
+        const result = await lockUser(page, username);
         res.json({ message: 'User locked successfully', result });
     } catch (err) {
         res.status(500).json({ error: 'Internal server error' });
@@ -198,7 +219,7 @@ app.post('/lockuser', async (req, res) => {
     }
 });
 
-app.post('/logs', (req, res) => {
+app.post('/logs', async (req, res) => {
     const date = req.body.date;
 
     if (!date) {
