@@ -13,7 +13,6 @@ require('dotenv').config();
 const app = express();
 const PORT = 5000;
 const bodyParser = require('body-parser');
-const { url } = require('inspector');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
@@ -39,7 +38,7 @@ var browser;
             process.env.NODE_ENV === "production"
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: false,
+        headless: true,
         timeout: 120000,
         defaultViewport: { width: 1600, height: 900 },
     });
