@@ -10,7 +10,7 @@ const isLogin = async (loginCache, url) => {
     const pageUrl = await loginCache.get(url).page.url();
     if (pageUrl.includes(url)) {
         try {
-            await loginCache.get(url).page.waitForXPath("/html/body/div/div/ng-include/div/section/form", { timeout: 10000 });
+            await loginCache.get(url).page.waitForXPath("/html/body/div/div/ng-include/div/section/form", { timeout: 3000 });
             return false;
         } catch (ex) {
         }
@@ -64,8 +64,7 @@ async function register(page, username) {
 
     try {
         await goToMemberListing(page);
-        await searchUser(page, username)
-            .catch(err => { });
+
         await page.waitForSelector('#createAgent')
             .then(ele => ele.click());
         await page.waitForSelector('form > section:nth-child(1) > div > div > div:nth-child(2) > span > input')
@@ -94,8 +93,8 @@ async function changePass(page, username, pass) {
         await searchUser(page, username);
         await page.click('table > tbody > tr:nth-child(2) > td > a');
         await page.waitForSelector('form');
-        await page.type('#ngdialog1-aria-describedby > div > div > div:nth-child(3) > input', pass);
-        await page.type('#ngdialog1-aria-describedby > div > div > div:nth-child(4) > input', pass);
+        await page.type('form > section:nth-child(1) > div > div > div:nth-child(3) > input', pass);
+        await page.type('form > section:nth-child(1) > div > div > div:nth-child(4) > input', pass);
         await page.keyboard.press('Enter');
 
         return await getResponseMessage(page);
@@ -109,9 +108,13 @@ async function lockUser(page, username) {
     try {
         await goToMemberListing(page);
         await searchUser(page, username);
-        await page.click('table > tbody > tr:nth-child(2) > td > a');
-        await page.waitForSelector('form');
-        await page.click('#ngdialog1-aria-describedby > div > div > div:nth-child(5) > label:nth-child(3) > input');
+
+        await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
+        await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
+
+        await page.waitForFunction('!!document.querySelector("form")', { timeout: 90000 });
+
+        await page.click('form > section:nth-child(1) > div > div > div:nth-child(5) > label:nth-child(3) > input');
         await page.keyboard.press('Enter');
 
         return await getResponseMessage(page);
@@ -125,6 +128,7 @@ async function deposit(page, username, amount) {
     try {
         await goToMemberListing(page);
         await searchUser(page, username);
+
         await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
         await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
 

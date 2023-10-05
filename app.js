@@ -214,9 +214,8 @@ app.post('/lockuser', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(err.message);
-    } finally {
-        page.close();
     }
+
 });
 
 app.post('/logs', async (req, res) => {
