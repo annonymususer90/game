@@ -59,7 +59,7 @@ app.use((req, res, next) => {
     if (loginCache.has(url) && req.path !== '/login')
         loginCache.get(url).isBusy = true;
 
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/addsite' && req.path !== '/getlogs') {
+    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/credentials' && req.path !== '/details') {
         isLogin(loginCache, url)
             .then(isLoggedIn => {
                 if (!isLoggedIn) {
@@ -80,12 +80,12 @@ app.use((req, res, next) => {
 });
 
 /* ******** api ******* */
-app.get('/addsite', async (req, res) => {
+app.get('/credentials', async (req, res) => {
     const filePath = path.join(__dirname, 'public', 'addsite.html');
     res.sendFile(filePath);
 });
 
-app.get('/getlogs', async (req, res) => {
+app.get('/details', async (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
 });
