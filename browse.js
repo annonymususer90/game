@@ -10,7 +10,7 @@ const isLogin = async (loginCache, url) => {
     const pageUrl = await loginCache.get(url).page.url();
     if (pageUrl.includes(url)) {
         try {
-            await loginCache.get(url).page.waitForXPath("/html/body/div/div/ng-include/div/section/form", { timeout: 3000 });
+            await loginCache.get(url).page.waitForXPath("/html/body/div/div/ng-include/div/section/form", { timeout: 10000 });
             return false;
         } catch (ex) {
         }
@@ -37,12 +37,14 @@ const goToMemberListing = async (page) => {
 }
 
 const searchUser = async (page, username) => {
-    await page.waitForSelector('#username');
+    await page.waitForFunction(`!!document.querySelector('#username')`);
+    // await page.waitForSelector('#username', { timeout: 120000 });
     await page.type('#username', username);
-    await page.waitForSelector('div.search-dropdown > ul > li:nth-child(1)');
+    await page.waitForFunction(`!!document.querySelector('div.search-dropdown > ul > li:nth-child(1)')`, { timeout: 90000 });
     await page.keyboard.press('Enter');
 
-    const element = await page.waitForSelector('table > tbody > tr:nth-child(2) > td > a', { timeout: 5000 });
+    await page.waitForSelector('table > tbody > tr:nth-child(2) > td > a', { timeout: 120000 });
+    const element = await page.$('table > tbody > tr:nth-child(2) > td > a');
     let value = await page.evaluate(ele => ele.textContent, element);
     if (value !== username)
         throw new Error('invalid username!');
@@ -94,7 +96,7 @@ async function changePass(page, username, pass) {
         await page.waitForSelector('form');
         await page.type('#ngdialog1-aria-describedby > div > div > div:nth-child(3) > input', pass);
         await page.type('#ngdialog1-aria-describedby > div > div > div:nth-child(4) > input', pass);
-        await page.click('button[type="submit"]');
+        await page.keyboard.press('Enter');
 
         return await getResponseMessage(page);
     } catch (error) {
@@ -110,7 +112,7 @@ async function lockUser(page, username) {
         await page.click('table > tbody > tr:nth-child(2) > td > a');
         await page.waitForSelector('form');
         await page.click('#ngdialog1-aria-describedby > div > div > div:nth-child(5) > label:nth-child(3) > input');
-        await page.click('button[type="submit"]');
+        await page.keyboard.press('Enter');
 
         return await getResponseMessage(page);
     } catch (error) {
@@ -119,21 +121,29 @@ async function lockUser(page, username) {
     }
 }
 
-
 async function deposit(page, username, amount) {
     try {
         await goToMemberListing(page);
         await searchUser(page, username);
-        await page.click('table > tbody > tr:nth-child(2) > td > a');
-        await page.waitForSelector('form');
-        const element = await page.$('#ngdialog1 > div.ngdialog-content > div.content.create-edit-form.ng-scope > form > section.form-section-wrap.user-credit-form.ng-scope > div > div > div > div:nth-child(1) > div.apl-form-row > input');
-        await page.evaluate((ele, amt) => {
-            var val = parseInt(ele.value);
-            ele.value = (val + amt);
-        }, element, amount);
-        await page.click('button[type="submit"]');
+        await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
+        await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
 
-        return await getResponseMessage(page);
+        await page.waitForFunction('!!document.querySelector("form")', { timeout: 90000 });
+
+        await page.waitForFunction(`!!document.querySelector('form > section:nth-child(2) > div > div > div > div:nth-child(1) input')`);
+        let availableCredit = await page.evaluate(`document.querySelector('form > section:nth-child(2) > div > div > div > div:nth-child(1) input').value`, { timeout: 120000 });
+        amount = parseInt(availableCredit) + parseInt(amount);
+        await page.evaluate(`document.querySelector('form > section:nth-child(2) > div > div > div > div:nth-child(1) input').focus()`);
+
+        for (let i = 0; i < availableCredit.length; i++)
+            await page.keyboard.press('Backspace');
+
+        await page.keyboard.type(amount.toString(), { delay: 100 });
+
+        await page.$eval('button[type="submit"]', async (ele) => await ele.click());
+
+        let result = await getResponseMessage(page);
+        return result;
     } catch (error) {
         errorAsync(error.message);
         return { success: false, error: error.message };
@@ -144,12 +154,25 @@ async function withdraw(page, username, amount) {
     try {
         await goToMemberListing(page);
         await searchUser(page, username);
-        await page.click('table > tbody > tr:nth-child(2) > td > a');
-        await page.waitForSelector('form');
-        await page.type('#ngdialog1 > div.ngdialog-content > div.content.create-edit-form.ng-scope > form > section.form-section-wrap.user-credit-form.ng-scope > div > div > div > div:nth-child(2) > div > input', amount);
-        await page.click('button[type="submit"]');
+        await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
+        await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
 
-        return await getResponseMessage(page);
+        await page.waitForFunction('!!document.querySelector("form")', { timeout: 90000 });
+
+        await page.waitForFunction(`!!document.querySelector('form > section:nth-child(2) > div > div > div > div:nth-child(1) input')`);
+        let availableCredit = await page.evaluate(`document.querySelector('form > section:nth-child(2) > div > div > div > div:nth-child(1) input').value`, { timeout: 120000 });
+        amount = parseInt(availableCredit) - parseInt(amount);
+        await page.evaluate(`document.querySelector('form > section:nth-child(2) > div > div > div > div:nth-child(1) input').focus()`);
+
+        for (let i = 0; i < availableCredit.length; i++)
+            await page.keyboard.press('Backspace');
+
+        await page.keyboard.type(amount.toString(), { delay: 100 });
+
+        await page.$eval('button[type="submit"]', async (ele) => await ele.click());
+
+        let result = await getResponseMessage(page);
+        return result;
     } catch (error) {
         errorAsync(error.message);
         return { success: false, error: error.message };

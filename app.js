@@ -57,7 +57,7 @@ app.use((req, res, next) => {
         return res.status(429).json(`the site is busy`);
     }
 
-    if (loginCache.has(url))
+    if (loginCache.has(url) && req.path !== '/login')
         loginCache.get(url).isBusy = true;
 
     if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/addsite' && req.path !== '/getlogs') {
@@ -74,10 +74,9 @@ app.use((req, res, next) => {
                     loginCache.get(url).isBusy = false;
             });
     } else {
-        next();
         if (loginCache.has(url))
-            loginCache.get(url).isBusy = false;
-
+            loginCache.get(url).isBusy = true;
+        next();
     }
 });
 
@@ -97,12 +96,12 @@ app.post('/login', async (req, res) => {
 
     if (await isLogin(loginCache, url)) {
         res.status(200).json({ message: 'login already awailable for url: ' + url });
+        loginCache.get(url).isBusy = false;
         return;
     }
 
     try {
-        const page = await browser.newPage();
-
+        const page = loginCache.get(url) ? loginCache.get(url).page : await browser.newPage();
         loginCache.set(url, {
             page: page,
             username: username,
@@ -113,6 +112,7 @@ app.post('/login', async (req, res) => {
         await login(page, url, username, password);
 
         res.status(200).json({ message: 'login success to url ' + url });
+
         loginCache.get(url).isBusy = false;
     } catch (ex) {
         errorAsync(ex.message);

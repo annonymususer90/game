@@ -102,7 +102,6 @@ function isValidAmount(amount) {
 
 module.exports = {
     isValidAmount: isValidAmount,
-    logger: logger,
     infoAsync: infoAsync,
     errorAsync: errorAsync,
     warnAsync: warnAsync
