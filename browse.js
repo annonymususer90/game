@@ -91,8 +91,10 @@ async function changePass(page, username, pass) {
     try {
         await goToMemberListing(page);
         await searchUser(page, username);
-        await page.click('table > tbody > tr:nth-child(2) > td > a');
-        await page.waitForSelector('form');
+        await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
+        await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
+
+        await page.waitForFunction('!!document.querySelector("form")', { timeout: 90000 });
         await page.type('form > section:nth-child(1) > div > div > div:nth-child(3) > input', pass);
         await page.type('form > section:nth-child(1) > div > div > div:nth-child(4) > input', pass);
         await page.keyboard.press('Enter');
