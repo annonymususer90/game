@@ -11,7 +11,7 @@ require('dotenv').config();
 
 /* ******** declarations & initializations ******* */
 const app = express();
-const PORT = 5000;
+const PORT = 4500;
 const bodyParser = require('body-parser');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
