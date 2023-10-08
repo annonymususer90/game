@@ -28,7 +28,7 @@ const getResponseMessage = async (page) => {
     return { success: true, message: message.trim() };
 }
 
-const goToMemberListing = async (page) => {
+const gotoMemberListing = async (page) => {
     await page.evaluate(`
             var leftPane = document.querySelector('.left-pane');
             leftPane.children[0].children[0].children[0].children[0].click();
@@ -36,9 +36,16 @@ const goToMemberListing = async (page) => {
         `);
 }
 
+const gotoTransfer = async (page) => {
+    await page.evaluate(`
+            var leftPane = document.querySelector('.left-pane');
+            leftPane.children[0].children[0].children[0].children[0].click();
+            leftPane.children[0].children[0].children[0].children[1].children[2].children[0].click()
+        `);
+}
+
 const searchUser = async (page, username) => {
     await page.waitForFunction(`!!document.querySelector('#username')`);
-    // await page.waitForSelector('#username', { timeout: 120000 });
     await page.type('#username', username);
     await page.waitForFunction(`!!document.querySelector('div.search-dropdown > ul > li:nth-child(1)')`, { timeout: 90000 });
     await page.keyboard.press('Enter');
@@ -63,7 +70,7 @@ async function login(page, url, username, password) {
 async function register(page, username) {
 
     try {
-        await goToMemberListing(page);
+        await gotoMemberListing(page);
 
         await page.waitForSelector('#createAgent')
             .then(ele => ele.click());
@@ -89,7 +96,7 @@ async function register(page, username) {
 
 async function changePass(page, username, pass) {
     try {
-        await goToMemberListing(page);
+        await gotoMemberListing(page);
         await searchUser(page, username);
         await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
         await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
@@ -108,7 +115,7 @@ async function changePass(page, username, pass) {
 
 async function lockUser(page, username) {
     try {
-        await goToMemberListing(page);
+        await gotoMemberListing(page);
         await searchUser(page, username);
 
         await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
@@ -128,7 +135,7 @@ async function lockUser(page, username) {
 
 async function deposit(page, username, amount) {
     try {
-        await goToMemberListing(page);
+        await gotoMemberListing(page);
         await searchUser(page, username);
 
         await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
@@ -158,9 +165,61 @@ async function deposit(page, username, amount) {
 
 async function withdraw(page, username, amount) {
     try {
-        await goToMemberListing(page);
+        await gotoMemberListing(page);
         await searchUser(page, username);
+
         await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
+
+        let creditLimit = '';
+        let creditLimitStr = await page.evaluate(() => document.querySelector('table > tbody > tr:nth-child(2) > td:nth-child(10)').innerText);
+        let creditLimitArr = creditLimitStr.split(',');
+        creditLimitArr.forEach(a => creditLimit += a);
+        creditLimit = parseInt(creditLimit);
+        amount = parseInt(amount);
+
+        if (creditLimit < amount) {
+            let give = await page.evaluate(() => document.querySelector('table > tbody > tr:nth-child(2) > td:nth-child(9)').innerText);
+
+            if (isNaN(give) || (parseInt(give) + creditLimit) < amount)
+                return { success: false, message: 'given amount is greater than withdrawable amount' };
+
+            let toGive = amount - creditLimit;
+
+            await gotoTransfer(page);
+
+            await page.waitForSelector('body > div > div > div > div.content > div.mid-pane > section > ng-view > div > table > tbody > tr:last-child', { timeout: constants.HIGH });
+
+            let theTr = null;
+            const trs = await page.$$('table tr');
+
+            for (const tr of trs) {
+                const td = await tr.$('td:first-child');
+                let innerText = ''
+                if (td) {
+                    innerText = await page.evaluate((td) => td.innerText, td);
+                }
+
+                if (innerText === username) {
+                    theTr = tr
+                    break;
+                }
+            }
+
+            await theTr.$eval('td:nth-child(9) > a', (tag) => tag.click());
+
+            await page.waitForFunction(() => !!document.querySelector('#apl-form-transfer-amount'));
+            // await page.focus('#apl-form-transfer-amount');
+
+            for (let i = 0; i < give.length; i++) {
+                await page.keyboard.press('Backspace');
+            }
+
+            await page.keyboard.type(toGive.toString());
+            await page.keyboard.press('Enter');
+
+            await gotoMemberListing(page);
+        }
+
         await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
 
         await page.waitForFunction('!!document.querySelector("form")', { timeout: 90000 });

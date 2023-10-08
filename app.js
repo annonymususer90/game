@@ -35,10 +35,10 @@ var browser;
             '--disable-gpu',
         ],
         executablePath:
-            process.env.NODE_ENV === "production"
+            process.env.NODE_ENV === 'production'
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: true,
+        headless: false,
         timeout: 120000,
         defaultViewport: { width: 1600, height: 900 },
     });
@@ -46,7 +46,7 @@ var browser;
 
 /* ******** middleware setup ******* */
 app.use(express.json());
-app.use(bodyParser.json())
+app.use(bodyParser.json());
 app.use(cors(corsOptions));
 app.use(express.static('public'));
 app.use((req, res, next) => {
@@ -80,6 +80,9 @@ app.use((req, res, next) => {
 });
 
 /* ******** api ******* */
+
+app.get('/', (req, res) => res.send('server up and running'))
+
 app.get('/credentials', async (req, res) => {
     const filePath = path.join(__dirname, 'public', 'addsite.html');
     res.sendFile(filePath);
