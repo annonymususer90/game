@@ -46,7 +46,7 @@ const searchUser = async (page, username) => {
     await page.waitForSelector('table > tbody > tr:nth-child(2) > td > a', { timeout: 120000 });
     const element = await page.$('table > tbody > tr:nth-child(2) > td > a');
     let value = await page.evaluate(ele => ele.textContent, element);
-    if (value !== username)
+    if (value !== username.toLowerCase())
         throw new Error('invalid username!');
 }
 
