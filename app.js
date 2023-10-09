@@ -16,7 +16,7 @@ const bodyParser = require('body-parser');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
-    origin: allowedDomains,
+    origin: null,
     methods: 'POST, GET',
     credentials: false,
     optionsSuccessStatus: 204
@@ -38,7 +38,7 @@ var browser;
             process.env.NODE_ENV === 'production'
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: false,
+        headless: true,
         timeout: 120000,
         defaultViewport: { width: 1600, height: 900 },
     });
