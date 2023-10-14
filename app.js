@@ -60,11 +60,7 @@ app.use((req, res, next) => {
     if (loginCache.has(url) && req.path !== '/login')
         loginCache.get(url).isBusy = true;
 
-<<<<<<< HEAD
     if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/credentials' && req.path !== '/details' && req.path != '/generate-excel') {
-=======
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/credentials' && req.path !== '/details' && req.path !== '/') {
->>>>>>> 68691e06fb5dbeda7c02adffe9dba1677df0cece
         isLogin(loginCache, url)
             .then(isLoggedIn => {
                 if (!isLoggedIn) {
@@ -91,10 +87,6 @@ app.get('/', (req, res) => res.send('server up and running'))
 app.get('/credentials', async (req, res) => {
     const filePath = path.join(__dirname, 'public', 'addsite.html');
     res.sendFile(filePath);
-});
-
-app.get('/', (req, res) => {
-    res.send('server up and running');
 });
 
 app.get('/details', async (req, res) => {
