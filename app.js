@@ -6,6 +6,7 @@ const cors = require('cors');
 const puppeteer = require('puppeteer');
 const { infoAsync, errorAsync, warnAsync, isValidAmount } = require('./apputils');
 const { isLogin, login, register, lockUser, deposit, withdraw, changePass } = require('./browse');
+const { createTransaction, getTransactionsAndWorkbook } = require('./db');
 
 require('dotenv').config();
 
@@ -16,7 +17,7 @@ const bodyParser = require('body-parser');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
-    origin: allowedDomains,
+    origin: null,
     methods: 'POST, GET',
     credentials: false,
     optionsSuccessStatus: 204
@@ -38,7 +39,7 @@ var browser;
             process.env.NODE_ENV === 'production'
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: false,
+        headless: true,
         timeout: 120000,
         defaultViewport: { width: 1600, height: 900 },
     });
@@ -59,7 +60,7 @@ app.use((req, res, next) => {
     if (loginCache.has(url) && req.path !== '/login')
         loginCache.get(url).isBusy = true;
 
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/credentials' && req.path !== '/details') {
+    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/credentials' && req.path !== '/details' && req.path != '/generate-excel') {
         isLogin(loginCache, url)
             .then(isLoggedIn => {
                 if (!isLoggedIn) {
@@ -91,6 +92,29 @@ app.get('/credentials', async (req, res) => {
 app.get('/details', async (req, res) => {
     const filePath = path.join(__dirname, 'public', 'downloadlogs.html');
     res.sendFile(filePath);
+});
+
+
+app.post('/generate-excel', (req, res) => {
+    const { startDate, endDate } = req.body;
+
+    getTransactionsAndWorkbook(startDate, endDate, req.headers.host)
+        .then(workbook => {
+            // Set the response headers to indicate an Excel file
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=log-${startDate}-${endDate}.xlsx`);
+
+            // Write the Excel workbook to the response
+            workbook.xlsx.write(res)
+                .catch(err => {
+                    res.status(500).send('Error generating Excel file');
+                    errorAsync(err.message);
+                });
+        })
+        .catch(err => {
+            res.status(500).send('Error: ' + err);
+            errorAsync(err);
+        });
 });
 
 app.post('/login', async (req, res) => {
@@ -154,6 +178,9 @@ app.post('/changepass', async (req, res) => {
 app.post('/deposit', async (req, res) => {
     const { url, username, amount } = req.body;
     const page = loginCache.get(url).page;
+    let result;
+    let responseTime;
+    let status = false;
     try {
         if (!isValidAmount(amount)) {
             res.status(400).json({ message: "invalid amount format" });
@@ -170,18 +197,24 @@ app.post('/deposit', async (req, res) => {
             warnAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, message: ${result.message} (${responseTime} ms)`);
         } else {
             res.json({ message: 'deposited successfully', result });
+            status = true;
             infoAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, amount: ${amount}, message: ${result.message} (${responseTime} ms)`);
         }
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(`[res] ${url} - ${res.statusCode}, Message: ${error.message}`);
+    } finally {
+        createTransaction(url, 'd', username, amount, responseTime, res.message, status, req.headers.host);
     }
+
 });
 
 app.post('/withdraw', async (req, res) => {
     const { url, username, amount } = req.body;
     const page = loginCache.get(url).page;
-
+    let result;
+    let responseTime;
+    let status = false;
     try {
         if (!isValidAmount(amount)) {
             res.status(400).json({ message: "invalid amount format" });
@@ -198,11 +231,15 @@ app.post('/withdraw', async (req, res) => {
             warnAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, message: ${result.message} (${responseTime} ms)`);
         } else {
             res.json({ message: 'Withdrawn successfully', result });
+            status = true;
             infoAsync(`[res] url: ${url}, status: ${res.statusCode}, user: ${username}, amount: ${amount}, message: ${result.message} (${responseTime} ms)`);
         }
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
         errorAsync(error.message);
+    }
+    finally {
+        createTransaction(url, 'w', username, amount, responseTime, res.message, status, req.headers.host);
     }
 });
 
