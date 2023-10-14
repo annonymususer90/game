@@ -53,7 +53,7 @@ const searchUser = async (page, username) => {
     await page.waitForSelector('table > tbody > tr:nth-child(2) > td > a', { timeout: 120000 });
     const element = await page.$('table > tbody > tr:nth-child(2) > td > a');
     let value = await page.evaluate(ele => ele.textContent, element);
-    if (value !== username)
+    if (value !== username.toLowerCase())
         throw new Error('invalid username!');
 }
 
@@ -98,8 +98,10 @@ async function changePass(page, username, pass) {
     try {
         await gotoMemberListing(page);
         await searchUser(page, username);
-        await page.click('table > tbody > tr:nth-child(2) > td > a');
-        await page.waitForSelector('form');
+        await page.waitForFunction(() => !!document.querySelector('table > tbody > tr:nth-child(2) > td > a'));
+        await page.evaluate(`document.querySelector('table > tbody > tr:nth-child(2) > td > a').click()`, { timeout: 120000 });
+
+        await page.waitForFunction('!!document.querySelector("form")', { timeout: 90000 });
         await page.type('form > section:nth-child(1) > div > div > div:nth-child(3) > input', pass);
         await page.type('form > section:nth-child(1) > div > div > div:nth-child(4) > input', pass);
         await page.keyboard.press('Enter');
