@@ -104,5 +104,5 @@ module.exports = {
     isValidAmount: isValidAmount,
     infoAsync: infoAsync,
     errorAsync: errorAsync,
-    warnAsync: warnAsync
+    warnAsync: warnAsync,
 };

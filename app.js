@@ -14,6 +14,7 @@ require('dotenv').config();
 const app = express();
 const PORT = 5000;
 const bodyParser = require('body-parser');
+const constants = require('./constants');
 const loginCache = new Map();
 const allowedDomains = ['http://fgpunt.com', 'https://fgpunt.com'];
 const corsOptions = {
@@ -39,7 +40,7 @@ var browser;
             process.env.NODE_ENV === 'production'
                 ? process.env.PUPPETEER_EXECUTABLE_PATH
                 : puppeteer.executablePath(),
-        headless: true,
+        headless: false,
         timeout: 120000,
         defaultViewport: { width: 1600, height: 900 },
     });
@@ -57,27 +58,49 @@ app.use((req, res, next) => {
         return res.status(429).json(`the site is busy`);
     }
 
-    if (loginCache.has(url) && req.path !== '/login')
-        loginCache.get(url).isBusy = true;
+    if (!['/login', '/logs', '/credentials', '/details', '/generate-excel'].includes(req.path)) {
+        if (!loginCache.has(url)) return res.status(404).send('admin missing, login to continue');
 
-    if (req.path !== '/login' && req.path !== '/logs' && req.path !== '/credentials' && req.path !== '/details' && req.path != '/generate-excel') {
+        loginCache.set(url, {
+            ...loginCache.get(url),
+            isBusy: true
+        });
+
         isLogin(loginCache, url)
-            .then(isLoggedIn => {
-                if (!isLoggedIn) {
-                    res.status(401).json({ message: 'login details not available' });
+            .then(isLogin => {
+
+                if (!isLogin) {
+                    const { page, username, password } = loginCache.get(url);
+
+                    login(page, url, username, password)
+                        .then((loginSuccess) => {
+                            if (loginSuccess) {
+                                next();
+                                loginCache.get(url).isBusy = false;
+                                return;
+                            }
+
+                            res.status(400).send('admin updated login again');
+                            loginCache.get(url).isBusy = false;
+                            return;
+                        })
+                        .catch(err => {
+                            res.status(400).send(err.message)
+                            loginCache.get(url).isBusy = false;
+                        });
+
                     return;
                 }
 
                 next();
-
                 if (loginCache.has(url))
                     loginCache.get(url).isBusy = false;
             });
-    } else {
-        if (loginCache.has(url))
-            loginCache.get(url).isBusy = true;
-        next();
+
+        return;
     }
+
+    next();
 });
 
 /* ******** api ******* */
@@ -120,6 +143,9 @@ app.post('/generate-excel', (req, res) => {
 app.post('/login', async (req, res) => {
     const { url, username, password } = req.body;
 
+    if (loginCache.has(url))
+        loginCache.get(url).isBusy = true;
+
     if (await isLogin(loginCache, url)) {
         res.status(200).json({ message: 'login already awailable for url: ' + url });
         loginCache.get(url).isBusy = false;
@@ -127,7 +153,7 @@ app.post('/login', async (req, res) => {
     }
 
     try {
-        const page = loginCache.get(url) ? loginCache.get(url).page : await browser.newPage();
+        const page = loginCache.has(url) ? loginCache.get(url).page : await browser.newPage();
         loginCache.set(url, {
             page: page,
             username: username,
@@ -139,10 +165,11 @@ app.post('/login', async (req, res) => {
 
         res.status(200).json({ message: 'login success to url ' + url });
 
-        loginCache.get(url).isBusy = false;
     } catch (ex) {
         errorAsync(ex.message);
-        res.status(400).json({ message: 'login unsuccess to ' + url });
+        res.status(400).json({ message: ex.message });
+    } finally {
+        loginCache.get(url).isBusy = false;
     }
 });
 
@@ -153,7 +180,7 @@ app.post('/register', async (req, res) => {
     try {
         const result = await register(page, username);
         if (result.success)
-            res.status(200).json(result);
+            res.status(200).json({ message: result.message, defaultPassword: constants.DEFAULT_PASSWORD });
         else
             res.status(400).json({ message: 'User registration not successful', result });
     } catch (error) {

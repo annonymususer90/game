@@ -3,7 +3,7 @@ const { infoAsync, errorAsync } = require('./apputils');
 
 const isLogin = async (loginCache, url) => {
 
-    if (loginCache.get(url) === undefined) {
+    if (!loginCache.get(url)) {
         return false;
     }
 
@@ -21,11 +21,11 @@ const isLogin = async (loginCache, url) => {
 
 const getResponseMessage = async (page) => {
     const element = await page.waitForSelector('div.content.-notices > p');
-    const message = await page.evaluate(ele => ele.textContent, element);
+    const message = await page.evaluate(ele => ele.innerText.toLowerCase(), element);
 
-    if (message.includes('Sorry'))
-        return { success: false, message: message.trim() };
-    return { success: true, message: message.trim() };
+    if (message.includes('sorry') || message.includes('not') || message.includes('cannot'))
+        return { success: false, message: message };
+    return { success: true, message: message };
 }
 
 const gotoMemberListing = async (page) => {
@@ -63,7 +63,23 @@ async function login(page, url, username, password) {
     await page.type('#username', username);
     await page.type('#password', password);
     await page.click('#submit');
-    await page.waitForNavigation({ timeout: 90000 });
+
+    let loggedInStatus = await page.waitForFunction(
+        () => !!document.querySelector(
+            'body > div > div > div > header > div.infobar > ul > li:nth-child(1) > p:nth-child(1)'
+        ),
+        {}
+    ).catch(error => false);
+
+    if (!loggedInStatus) {
+        let message = await page.$eval(
+            'body > div > div > ng-include > div > section > form > div:nth-child(6) > tr > td',
+            (el) => el.innerText
+        );
+        throw new Error(message);
+    }
+
+    // await page.waitForNavigation({ timeout: 90000 });
     infoAsync(`login successful, url: ${url}`);
 }
 
